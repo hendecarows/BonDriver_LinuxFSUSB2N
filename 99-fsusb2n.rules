@@ -1,0 +1,5 @@
+# KTV-FSUSB2
+SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTRS{idVendor}=="0511", ATTRS{idProduct}=="0029", MODE="0664", GROUP="video"
+
+# /dev/fsusb2n0
+#SUBSYSTEM=="usb", ATTRS{idVendor}=="0511", ATTRS{idProduct}=="0029", KERNELS=="1-2.1", MODE="0664", GROUP="video", SYMLINK+="fsusb2n0"
