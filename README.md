@@ -10,7 +10,7 @@ BonDriver化にあたり、[recfsusb2n][link_recfsusb2n]とnns779氏の[BonDrive
 
 git, cmakeを含むビルドツールをインストールした状態でビルドします。
 
-```console
+```sh
 git clone https://github.com/hendecarows/BonDriver_LinuxFSUSB2N.git
 cd BonDriver_LinuxFSUSB2N
 mkdir build

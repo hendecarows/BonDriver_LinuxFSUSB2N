@@ -2,16 +2,16 @@
 #include <string.h>
 #include <time.h>
 
+#include <chrono>
+#include <thread>
+
 #include "ktv.hpp"
 
 #define TBL_SZ(a) (sizeof(a)/sizeof(*a))
 
 inline void miliWait( int s )
 {
-	timespec req;
-	req.tv_sec = 0;
-	req.tv_nsec = s * 1000000;
-	nanosleep(&req, NULL);
+	std::this_thread::sleep_for(std::chrono::milliseconds(s));
 }
 /* */
 
@@ -576,12 +576,13 @@ Ktv2Device::~Ktv2Device()
 }
 
 void Ktv2Device::InitTuner ()
-{	
+{
 	static uint8_t initData[] = {
 		0x02,0x00, 0x03,0x40, 0x05,0x04, 0x06,0x10,
 		0x2e,0x15, 0x30,0x10, 0x45,0x58, 0x48,0x19,
 		0x52,0x03, 0x53,0x44, 0x6a,0x4b, 0x76,0x00,
 		0x78,0x18, 0x7a,0x17, 0x85,0x06, 0x01,0x01};
+
 	uint8_t d = 0xff;
 	Tuner_I2C_Write(&d, 1);
 	miliWait(1);

@@ -122,6 +122,7 @@ private:
 		const std::string GetSystemUtf8() const { return system_u8_; }
 		System GetSystem() const { return system_; }
 		int32_t GetDemodSequenceState() const { return demod_sequence_state_; }
+		int32_t GetMaxErrorPackets() const { return max_error_packets_; }
 		int32_t GetTimeoutHasLock() const { return timeout_has_lock_; }
 		int32_t GetWaitHasLock() const { return wait_has_lock_; }
 		const Channel &GetChannel(std::size_t pos) const { return channel_.at(pos); };
@@ -132,7 +133,8 @@ private:
 		std::u16string name_;
 		System system_ = System::UNKNOWN;
 		std::string system_u8_;
-		int32_t demod_sequence_state_ = 9;
+		int32_t demod_sequence_state_ = 8;
+		int32_t max_error_packets_ = 0;
 		int32_t timeout_has_lock_ = 3000;
 		int32_t wait_has_lock_ = 100;
 		std::vector<Channel> channel_;

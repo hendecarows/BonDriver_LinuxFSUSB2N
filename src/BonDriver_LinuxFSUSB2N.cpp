@@ -141,17 +141,6 @@ bool BonDriver::OpenTuner(void)
 			return false;
 		}
 		
-		// チューナーの初期化
-		PLOGD << "ktv_device: InitTuner";
-		std::this_thread::sleep_for(160ms);
-		ktv_device_->InitTuner();
-
-		// 復調デバイスの初期化
-		PLOGD << "ktv_device: InitDeMod, ResetDeMod";
-		std::this_thread::sleep_for(180ms);
-		ktv_device_->InitDeMod();
-		ktv_device_->ResetDeMod();
-
 		// TSスレッドを一時停止で起動
 		PLOGD << "stream thread: start";
 		is_stream_thread_running_ = true;
@@ -341,7 +330,8 @@ bool BonDriver::SetChannel(const uint32_t dwSpace, const uint32_t dwChannel)
 	}
 
 	uint32_t freq = 0;
-	auto demod_squence_state = 9;
+	auto demod_squence_state = 8;
+	auto max_error_packets = 0;
 	auto timeout_has_lock = 3000;
 	auto wait_has_lock = 100;
 
@@ -354,6 +344,7 @@ bool BonDriver::SetChannel(const uint32_t dwSpace, const uint32_t dwChannel)
 
 		freq = s.GetChannel(dwChannel).GetFreq();
 		demod_squence_state = s.GetDemodSequenceState();
+		max_error_packets = s.GetMaxErrorPackets();
 		timeout_has_lock = s.GetTimeoutHasLock();
 		wait_has_lock = s.GetWaitHasLock();
 
@@ -373,7 +364,6 @@ bool BonDriver::SetChannel(const uint32_t dwSpace, const uint32_t dwChannel)
 			// MxL135RF : 44MHz - 885MHz
 			if (freq < 44000 || freq > 885000) {
 				throw RuntimeError(std::format("frequency error MxL135RF 44MHz - 885MHz f = {}", freq));
-				return false;
 			}
 			break;
 		default:
@@ -397,11 +387,16 @@ bool BonDriver::SetChannel(const uint32_t dwSpace, const uint32_t dwChannel)
 		em2874_device_->pauseStream();
 	}
 
+	PLOGD << "ktv_device: InitTuner";
+	ktv_device_->InitTuner();
+
 	PLOGD << "ktv_device: SetFrequency";
 	ktv_device_->SetFrequency(freq);
 
+	PLOGD << "ktv_device: InitDemod";
+	ktv_device_->InitDeMod();
+
 	PLOGD << "ktv_device: ResetDmod";
-	std::this_thread::sleep_for(5ms);
 	ktv_device_->ResetDeMod();
 
 	if (em2874_device_->isStreaming()) {
@@ -419,7 +414,7 @@ bool BonDriver::SetChannel(const uint32_t dwSpace, const uint32_t dwChannel)
 	auto is_locked = false;
 	uint8_t *data = nullptr;
 	StreamResult result;
-	while (now <= timeout) {
+	while (now < timeout) {
 		auto sequence = static_cast<int32_t>(ktv_device_->DeMod_GetSequenceState());
 		auto size = em2874_device_->getStream((const void **)&data);
 		PLOGD << "elapsed time: " << std::chrono::duration_cast<std::chrono::milliseconds>(now - start)
@@ -427,8 +422,10 @@ bool BonDriver::SetChannel(const uint32_t dwSpace, const uint32_t dwChannel)
 			<< " stream size: " << size;
 
 		VerifyStream(data, size, result);
-		if (sequence >= demod_squence_state && result.is_valid_sync && result.error_packets == 0) {
-			PLOGD << "has lock demod sequence: " << sequence;
+		if (sequence >= demod_squence_state && result.is_valid_sync && result.error_packets <= max_error_packets) {
+			PLOGD << "has locked demod sequence: "
+				<< sequence << " >= " << demod_squence_state
+				<< " error: " << result.error_packets << " <= " << max_error_packets;
 			is_locked = true;
 			break;
 		}
@@ -437,17 +434,20 @@ bool BonDriver::SetChannel(const uint32_t dwSpace, const uint32_t dwChannel)
 		now = std::chrono::steady_clock::now();
 	}
 
+	PurgeTsStream();
+
 	if (is_locked) {
-		PurgeTsStream();
-		size_t lost_size = 0;
-		stream_buffer_->Write(data + result.sync_offset, result.sync_size, lost_size);
-		PLOGD << "lost_size: " << lost_size;
+		if (data) {
+			size_t lost_size = 0;
+			stream_buffer_->Write(data + result.sync_offset, result.sync_size, lost_size);
+			PLOGD << "initial_size: " << result.sync_size << " lost_size: " << lost_size;
+		}
 	} else {
 		PLOGE << "failed to lock freq: " << freq;
 		em2874_device_->stopStream();
-		PurgeTsStream();
 		return false;
 	}
+
 
 	// TS受信スレッドの再開
 	{
@@ -644,7 +644,8 @@ BonDriver::Space::Space(strutil::CharConv &cv, config::Config::Section& sct)
 	name_ = cv.Convert<std::u16string>(name_u8_);
 	system_u8_ = sct.Get("System");
 	demod_sequence_state_ = sct.GetIntMinMax("DemodSequenceState", 9, 7, 9);
-	timeout_has_lock_ = sct.GetIntMinMax("TimeoutHasLock", 3000, 0, 5000);
+	max_error_packets_ = sct.GetIntMinMax("MaxErrorPackets", 0, 0, 10000);
+	timeout_has_lock_ = sct.GetIntMinMax("TimeoutHasLock", 3000, 0, 30000);
 	wait_has_lock_ = sct.GetIntMinMax("WaitHasLock", 100, 10, 1000);
 
 	if (!system_u8_.compare("ISDB-T")) {

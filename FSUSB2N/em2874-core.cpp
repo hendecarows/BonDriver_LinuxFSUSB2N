@@ -2,6 +2,7 @@
 #include <unistd.h>
 
 #include <cstdint>
+#include <chrono>
 #include <filesystem>
 #include <memory>
 #include <string>
@@ -30,6 +31,11 @@
 
 const char BASE_DIR_UDEV[]	= "/dev/bus/usb"; // udev_USB
 const char BASE_DIR_USBFS[]	= "/proc/bus/usb"; // usbfs
+
+inline void miliWait( int s )
+{
+	std::this_thread::sleep_for(std::chrono::milliseconds(s));
+}
 
 inline uint8_t ICC_checkSum (const uint8_t* data, int len)
 {
@@ -83,7 +89,12 @@ bool EM2874Device::openUsbDevice (const char *devfile)
 		writeReg(0x1b, 0);
 		writeReg(0x5e, 128);
 		writeReg( EM2874_REG_TS_ENABLE, 0 );
-		writeReg(EM2874_REG_CAS_MODE1, 0x0);
+
+		writeReg( EM28XX_REG_GPIO, 0x3e );
+		miliWait(100);
+		writeReg( EM28XX_REG_GPIO, 0x7e );
+		miliWait(50);
+
 		return true;
 	}
 
